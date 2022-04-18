@@ -29,26 +29,35 @@ libraries()
 # Starting the Timer
 tictoc::tic()
 
-# Local Dataframes
-db_Tickers <- data.frame(Ticker         = c("SPX", "XSP", "SPY"), # These tickers must match the ones you downloaded from the CBOE webpage
-                         Multiplier     = 100,          # Option Multiplier
-                         div_yield      = 1.3,          # Dividend Yield of the underlying
-                         risk_free_rate = 1.9,          # The Risk Free Rate that you want to use
-                         Price_Ratio    = c(1, 10, 10)) # By how much you need to multiply the price to put it at the same level as the Reference Ticker
+# Local Variables
+Ticker           <- c("SPX", "XSP", "SPY") # The same names you used in the CBOE website
+Price_Ratio      <- c(1, 10, 10)
+Multiplier       <- c(100, 100, 100)
+Option_Type      <- c("European", "European", "American")
+Chart_label      <- "SPX, XSP and SPY"
+Reference_Ticker <- "SPX"
+
+# Getting the Risk Free Rate (Using the 10 Year Gov Bong Yield as a proxy)
+risk_free_rate <- getSymbols(Symbols = "DGS10", src = "FRED", auto.assign = FALSE) %>%
+  tail(n = 1) %>%
+  as.data.frame() %>%
+  pull(1)
+
+# Defining the dataframe with tickers and tickers information
+db_Tickers <- data.frame(Ticker         = Ticker,
+                         Multiplier     = Multiplier, 
+                         Option_Type    = Option_Type,
+                         risk_free_rate = risk_free_rate/100, 
+                         Price_Ratio    = Price_Ratio) %>%   # By how much you need to multiply the price to put it at the same level as the Reference Ticker
+  dplyr::mutate(div_yield = getQuote(Ticker, what = yahooQF("Dividend Yield"))[2] %>% pull(1)) %>% # Dividend Yield of the underlying
+  replace(is.na(.), 0)
 
 db_Option_Chain_Combined <- NULL
 db_prices_from_CBOE      <- NULL
 
-# Local Variables
-Days_In_A_Year      <- 365     # Annual convention to be used in Option Pricing
-Label               <- "Sp500" # Label to be use in the Chart Titles
-Reference_Ticker    <- "SPX"   # Reference Ticker
-MMS_First_Criteria  <- 0.95    # Moneyness criteria for the Implied Volatility Structure
-MMS_Second_Criteria <- 1.05    # Moneyness criteria for the Implied Volatility Structure
-
 # Generating the Option Chain
 acum_GEX <- NULL
-for(CBOE_File in list.files("cboe_file/")){ # CBOE_File <- "qqq_quotedata.csv"
+for(CBOE_File in list.files("cboe_file/")){ # CBOE_File <- "spx_quotedata.csv"
   
   # Extracting the Ticker from the CBOE file
   Ticker_Symbol <- CBOE_File %>% strsplit(split = "_") %>% 
@@ -106,8 +115,8 @@ for(CBOE_File in list.files("cboe_file/")){ # CBOE_File <- "qqq_quotedata.csv"
                   Spot_Price            = Spot_Price) %>%
     janitor::clean_names() %>%
     dplyr::select(fixed_expiration_date, iv, open_interest, strike, spot_price) %>%
-    dplyr::mutate(time_expiration_years = (((fixed_expiration_date %>% as.Date()) - file_downloaded_date) %>% as.numeric())/Days_In_A_Year,
-                  time_expiration_years = case_when(time_expiration_years == 0 ~ 1/Days_In_A_Year, TRUE ~ time_expiration_years), # For 0 DTE options, setting DTE = 1 day, otherwise they get excluded
+    dplyr::mutate(time_expiration_years = (((fixed_expiration_date %>% as.Date()) - file_downloaded_date) %>% as.numeric())/365,
+                  time_expiration_years = case_when(time_expiration_years == 0 ~ 1/365, TRUE ~ time_expiration_years), # For 0 DTE options, setting DTE = 1 day, otherwise they get excluded
                   Ticker                = Ticker_Symbol,
                   type                  = "Calls") %>%
     left_join(db_Tickers, by = "Ticker") %>% 
@@ -121,7 +130,7 @@ for(CBOE_File in list.files("cboe_file/")){ # CBOE_File <- "qqq_quotedata.csv"
                              v  = db_Option_Chain_Calls$iv %>% as.numeric(),
                              r  = db_Option_Chain_Calls$risk_free_rate/100,
                              tt = db_Option_Chain_Calls$time_expiration_years,
-                             d  = db_Option_Chain_Calls$div_yield/100), complete = TRUE) %>%
+                             d  = db_Option_Chain_Calls$div_yield), complete = TRUE) %>%
     dplyr::select(k, s, Gamma) %>%
     dplyr::mutate(Date       = db_Option_Chain_Calls$fixed_expiration_date,
                   OI         = db_Option_Chain_Calls$open_interest %>% as.numeric(),
@@ -153,8 +162,8 @@ for(CBOE_File in list.files("cboe_file/")){ # CBOE_File <- "qqq_quotedata.csv"
                   Spot_Price            = Spot_Price) %>%
     janitor::clean_names() %>%
     dplyr::select(fixed_expiration_date, iv, open_interest, strike, spot_price) %>%
-    dplyr::mutate(time_expiration_years = (((fixed_expiration_date %>% as.Date()) - file_downloaded_date) %>% as.numeric())/Days_In_A_Year,
-                  time_expiration_years = case_when(time_expiration_years == 0 ~ 1/Days_In_A_Year, TRUE ~ time_expiration_years), # For 0 DTE options, setting DTE = 1 day, otherwise they get excluded
+    dplyr::mutate(time_expiration_years = (((fixed_expiration_date %>% as.Date()) - file_downloaded_date) %>% as.numeric())/365,
+                  time_expiration_years = case_when(time_expiration_years == 0 ~ 1/365, TRUE ~ time_expiration_years), # For 0 DTE options, setting DTE = 1 day, otherwise they get excluded
                   Ticker                = Ticker_Symbol,
                   type                  = "Puts") %>%
     left_join(db_Tickers, by = "Ticker") %>% 
@@ -168,7 +177,7 @@ for(CBOE_File in list.files("cboe_file/")){ # CBOE_File <- "qqq_quotedata.csv"
                            v  = db_Option_Chain_Puts$iv %>% as.numeric(),
                            r  = db_Option_Chain_Puts$risk_free_rate/100,
                            tt = db_Option_Chain_Puts$time_expiration_years,
-                           d  = db_Option_Chain_Puts$div_yield/100), complete = TRUE) %>%
+                           d  = db_Option_Chain_Puts$div_yield), complete = TRUE) %>%
     dplyr::select(k, s, Gamma) %>%
     dplyr::mutate(Date       = db_Option_Chain_Puts$fixed_expiration_date,
                   OI         = db_Option_Chain_Puts$open_interest %>% as.numeric(),
@@ -211,7 +220,7 @@ p <- acum_GEX %>%
   geom_vline(xintercept = Reference_Price, linetype = "dotted", color = "blue", size = 0.9) +
   scale_y_continuous(labels = scales::dollar_format()) +
   labs(title    = str_glue("Total Gamma Exposure: {dollar_format()(sum(acum_GEX$GEX)/1000000000)} Billions per 1% move in the SP500"),
-       subtitle = str_glue("Assuming dealers are long calls and short puts."),
+       subtitle = str_glue("Assuming dealers are long calls and short puts (considering: {Chart_label})."), 
        caption  = "Data Source: CBOE.",
        x = "Strike Price",
        y = "Spot Gamma Exposure (Billions)") +
@@ -235,7 +244,7 @@ p <- acum_GEX %>%
   geom_bar(stat = "identity") +
   scale_y_continuous(labels = scales::dollar_format()) +
   labs(title    = str_glue("Total Gamma Exposure by Expiration Date - Next Two Months"),
-       subtitle = str_glue("Assuming dealers are long calls and short puts."),
+       subtitle = str_glue("Assuming dealers are long calls and short puts (considering: {Chart_label})."), 
        caption  = "Data Source: CBOE.",
        x = "Expiration Date",
        y = "Spot Gamma Exposure (Billions)") +
@@ -246,8 +255,6 @@ p
 ggsave("GEX_vs_Next_Two_Months.png", plot = p, device = "png", path = "Plots - GEX CBOE/", width = 10, height = 7, units = "in") 
 
 # GEX across Strikes and option type
-Colour <- c(Calls = "green", Puts = "red")
-
 p <- acum_GEX %>%
   dplyr::select(k, type, GEX) %>%
   dplyr::filter(k > Reference_Price*0.80 & k < Reference_Price*1.20) %>%
@@ -257,10 +264,10 @@ p <- acum_GEX %>%
   ggplot(aes(x = Strike, y = `Gamma Exposure`, fill = Type)) +
   geom_vline(xintercept = Reference_Price, linetype = "dotted", color = "blue", size = 0.9) +
   geom_bar(stat = "identity") +
-  scale_fill_manual(values=Colour) +
+  scale_fill_manual(values = c(Calls = "green", Puts = "red")) +
   scale_y_continuous(labels = scales::dollar_format()) +
   labs(title    = str_glue("Total Gamma Exposure: {dollar_format()(sum(acum_GEX$GEX)/1000000000)} Billions per 1% move in the SP500"),
-       subtitle = str_glue("Assuming dealers are long calls and short puts (considering Options on the {Label})."),
+       subtitle = str_glue("Assuming dealers are long calls and short puts (considering: {Chart_label})."), 
        caption  = "Data Source: CBOE.",
        x = "Strike Price",
        y = "Spot Gamma Exposure (Billions)") +
@@ -303,7 +310,7 @@ for(blocks in GEX_blocks){ # blocks <- "All expirations"
                                v  = db_Options_Type_Subset$iv %>% as.numeric(),
                                r  = db_Options_Type_Subset$risk_free_rate/100,
                                tt = db_Options_Type_Subset$time_expiration_years,
-                               d  = db_Options_Type_Subset$div_yield/100), complete = TRUE) %>%
+                               d  = db_Options_Type_Subset$div_yield), complete = TRUE) %>%
       dplyr::select(k, s, Gamma) %>%
       dplyr::mutate(Date       = db_Options_Type_Subset$fixed_expiration_date,
                     OI         = db_Options_Type_Subset$open_interest %>% as.numeric(),
@@ -320,7 +327,7 @@ for(blocks in GEX_blocks){ # blocks <- "All expirations"
                              v  = db_Options_Type_Subset$iv %>% as.numeric(),
                              r  = db_Options_Type_Subset$risk_free_rate/100,
                              tt = db_Options_Type_Subset$time_expiration_years,
-                             d  = db_Options_Type_Subset$div_yield/100), complete = TRUE) %>%
+                             d  = db_Options_Type_Subset$div_yield), complete = TRUE) %>%
       dplyr::select(k, s, Gamma) %>%
       dplyr::mutate(Date       = db_Options_Type_Subset$fixed_expiration_date,
                     OI         = db_Options_Type_Subset$open_interest %>% as.numeric(),
@@ -368,7 +375,7 @@ p <- db_GEX_Profile %>%
   geom_vline(xintercept = c(0, Gamma_Flip/100), linetype = c("twodash", "dotted"), color = c("steelblue", "red"), size = 0.9) +
   geom_hline(yintercept = c(sum(acum_GEX$GEX)/1000000000, 0), linetype = c("twodash", "dotted"), color = c("steelblue", "red"), size = 0.9) +
   labs(title    = str_glue("Gamma Exposure Profile of the SP500. All expirations."),
-       subtitle = str_glue("Gamma Flip at {round(Gamma_Flip, digits = 2)}% of current price (meaning at: {round(Reference_Price*(1+Gamma_Flip/100), digits = 2)}). This study is considering Options on the {Label}."),
+       subtitle = str_glue("Gamma Flip at {round(Gamma_Flip, digits = 2)}% of current price (meaning at: {round(Reference_Price*(1+Gamma_Flip/100), digits = 2)}). Assuming dealers are long calls and short puts (considering: {Chart_label})."),
        caption  = "Data Source: CBOE.",
        x = "Change in SPX Price",
        y = "Spot Gamma Exposure (Billions)") +
@@ -381,7 +388,7 @@ p <- db_GEX_Profile %>%
 
 p
 
-ggsave("GEX_Profile_All_Expirations.png", plot = p, device = "png", path = "Plots - GEX CBOE/", width = 10, height = 7, units = "in")
+ggsave("GEX_Profile_All_Expirations.png", plot = p, device = "png", path = "Plots - GEX CBOE/", width = 15, height = 7, units = "in")
 
 
 # Analyzing the Impact of Different Expiration.
@@ -396,7 +403,7 @@ p <- db_GEX_Profile %>%
   geom_hline(yintercept = c(sum(acum_GEX$GEX)/1000000000, 0), linetype = c("twodash", "dotted"), color = c("steelblue", "red"), size = 0.9) +
   geom_line(size = 1.3) +
   labs(title    = str_glue("Gamma Exposure Profile of the SP500. Analyzing different Scenarios."),
-       subtitle = str_glue("Gamma Flip at {round(Gamma_Flip, digits = 2)}% of current price (meaning at: {round(Reference_Price*(1+Gamma_Flip/100), digits = 2)}). This study is considering Options on the {Label}."),
+       subtitle = str_glue("Gamma Flip at {round(Gamma_Flip, digits = 2)}% of current price (meaning at: {round(Reference_Price*(1+Gamma_Flip/100), digits = 2)}). Assuming dealers are long calls and short puts (considering: {Chart_label})."),
        caption  = "Data Source: CBOE.",
        x = "Change in SPX Price",
        y = "Spot Gamma Exposure (Billions)") +
@@ -407,86 +414,14 @@ p <- db_GEX_Profile %>%
                      sec.axis = sec_axis(trans = ~ . * Reference_Price + Reference_Price, name = "SPX Price", breaks = scales::pretty_breaks(n = 10))) +
   theme(legend.title = element_blank())  
 
-
 p
 
-ggsave("GEX_Profile_Scenarios.png", plot = p, device = "png", path = "Plots - GEX CBOE/", width = 10, height = 7, units = "in") 
-
-# Getting the VIX
-db_Volatility <- tq_get("^VIX",
-                        from = Sys.Date() - lubridate::years(2),
-                        to   = Sys.Date(),
-                        get  = "stock.prices",
-                        complete_cases = TRUE) %>%
-  dplyr::select(date, adjusted) %>%
-  left_join(tq_get("SPY",
-                   from = Sys.Date() - lubridate::years(2),
-                   to   = Sys.Date(),
-                   get  = "stock.prices",
-                   complete_cases = TRUE) %>%
-              dplyr::select(date, adjusted) %>%
-              dplyr::mutate(Ret      = TTR::ROC(adjusted, n = 1, type = "discrete"),
-                            Real_Vol = roll::roll_sd(Ret, width = 22)*100*sqrt(252)) %>%
-              dplyr::select(date, Real_Vol), by = "date") %>%
-  na.omit() %>%
-  dplyr::mutate(Spread = adjusted - Real_Vol) %>%
-  purrr::set_names(c("Date", "Implied Volatility", "Realized Volatility", "Spread"))
-
-p_volatilites <- db_Volatility %>%
-  dplyr::select(Date, `Implied Volatility`, `Realized Volatility`) %>%
-  pivot_longer(names_to = "Type", values_to = "Volatility", -Date) %>%
-  ggplot(aes(x = Date, y = Volatility/100, colour = Type)) +
-  geom_line(size = 0.7) +
-  theme_bw() +
-  labs(title    = "VIX vs Realized SP500 short-term Volatility",
-       subtitle = "Volatility behavior of the SP500",
-       caption  = "",
-       x        = "",
-       y        = "") +
-  scale_y_continuous(labels = scales::percent) + 
-  theme(legend.title = element_blank()) +
-  theme(legend.position="bottom")
-
-p_spread <- db_Volatility %>%
-  dplyr::select(Date, Spread) %>%
-  dplyr::mutate(Mean_Vol = roll::roll_mean(Spread, width = 50)) %>%
-  na.omit() %>%
-  purrr::set_names(c("Date", "Spread", "Mean")) %>%
-  ggplot() +
-  geom_line(aes(x = Date, y = Spread/100), size = 0.7) +
-  geom_line(aes(x = Date, y = Mean/100), size = 1.1, colour = "red") +
-  theme_bw() +
-  labs(title    = "Volatility Spread",
-       subtitle = "How expensive/cheap is the current volatility?",
-       caption  = "",
-       x        = "",
-       y        = "") +
-  scale_y_continuous(labels = scales::percent) + 
-  theme(legend.title = element_blank())
-
-p_vix <- db_Volatility %>%
-  dplyr::select(Date, `Implied Volatility`) %>%
-  purrr::set_names(c("Date", "IV")) %>%
-  bind_rows(data.frame(Date = Sys.Date(),
-                       IV   = getQuote("^VIX") %>% dplyr::select(Last) %>% pull(1))) %>%
-  ggplot(aes(x = Date, y = IV/100)) +
-  geom_line(size = 0.7) +
-  geom_smooth(method = 'loess', formula = 'y ~ x') +
-  theme_bw() +
-  labs(title    = "CBOE Volatility Index",
-       subtitle = "Short-term trend of the Implied Volatility",
-       caption  = "Data Source: Yahoo Finance.",
-       x        = "",
-       y        = "") +
-  scale_y_continuous(labels = scales::percent) + 
-  theme(legend.title = element_blank()) +
-  geom_hline(yintercept = 0.25, linetype = "dashed", color = "red", size = 1.2)
-
-grid.arrange(p_volatilites, arrangeGrob(p_spread, p_vix, ncol=2), nrow = 2)
-
-ggsave("VIX_Analysis.png", plot = grid.arrange(p_volatilites, arrangeGrob(p_spread, p_vix, ncol=2), nrow = 2), path = "Plots - GEX CBOE/", width = 10, height = 7, units = "in") 
+ggsave("GEX_Profile_Scenarios.png", plot = p, device = "png", path = "Plots - GEX CBOE/", width = 15, height = 7, units = "in") 
 
 # Extracting the VIX Structure from the Option Chain
+MMS_First_Criteria  <- 0.95    # Moneyness criteria for the Implied Volatility Structure
+MMS_Second_Criteria <- 1.05    # Moneyness criteria for the Implied Volatility Structure
+
 ATM_Price         <- Reference_Price
 MoneynessFC_Price <- ATM_Price*MMS_First_Criteria
 MoneynessSC_Price <- ATM_Price*MMS_Second_Criteria

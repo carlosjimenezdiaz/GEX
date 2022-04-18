@@ -19,5 +19,6 @@ function(){
     if (!require("jsonlite")) install.packages("jsonlite"); library(jsonlite)
     if (!require("RQuantLib")) install.packages("RQuantLib"); library(RQuantLib)
     if (!require("pbapply")) install.packages("pbapply"); library(pbapply)
+    if (!require("xml2")) install.packages("xml2"); library(xml2)
   })
 }
