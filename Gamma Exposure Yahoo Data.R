@@ -60,77 +60,47 @@ for(Ticker_Yahoo in db_Tickers$Ticker){ # Ticker_Yahoo <- "SPY"
   option_chain_yahoo <- bind_rows(option_chain_yahoo, db_option)
 }
 
-# Replacing NAs with Zero
-option_chain_yahoo <- option_chain_yahoo %>% replace(is.na(.), 0)
-
 # Fixing and Enhancing the database
 option_chain_yahoo_enhanced <- option_chain_yahoo %>%
   left_join(db_Tickers, by = c("Symbol" = "Ticker")) %>%
   dplyr::mutate(Symbol = case_when(Symbol == "^SPX" ~ "SPX", 
                                    Symbol == "^XSP" ~ "XSP",
-                                   TRUE ~ Symbol))
+                                   TRUE ~ Symbol)) %>%
+  dplyr::filter(Expiration >= Sys.Date())
 
-# Addaping the structure of the option chain to US or EU machines
-if(environment_r == "US"){
-  # Fixing some formats
-  db_option_chain_final <- option_chain_yahoo_enhanced %>%
-    dplyr::mutate(data_month = substr(name, 1, 3),  # Extracting just the portion related to the month
-                  data_day   = substr(name, 5, 6),  # Extracting just the portion related to the day
-                  data_year  = substr(name, 8, 11), # Extracting just the portion related to the year
-                  type       = substr(name, 13, length(name)),
-                  data_month = case_when(data_month == "Jan" ~ "01",
-                                         data_month == "Feb" ~ "02",
-                                         data_month == "Mar" ~ "03",
-                                         data_month == "Apr" ~ "04",
-                                         data_month == "May" ~ "05",
-                                         data_month == "Jun" ~ "06",
-                                         data_month == "Jul" ~ "07",
-                                         data_month == "Aug" ~ "08",
-                                         data_month == "Sep" ~ "09",
-                                         data_month == "Oct" ~ "10",
-                                         data_month == "Nov" ~ "11",
-                                         data_month == "Dec" ~ "12",
-                                         TRUE ~ data_month),
-                  final_date   = as.Date(str_glue("{data_year}-{data_month}-{data_day}"), format = "%Y-%m-%d"),
-                  Time_Process = Sys.time()) %>%
-    replace(is.na(.), 0)
-}else{
-  # Fixing some formats
-  db_option_chain_final <- option_chain_yahoo_enhanced %>%
-    dplyr::mutate(data_month = substr(name, 1, 3),  # Extracting just the portion related to the month
-                  data_day   = substr(name, 6, 7),  # Extracting just the portion related to the day
-                  data_year  = substr(name, 9, 12), # Extracting just the portion related to the year
-                  type       = substr(name, 14, length(name)),
-                  data_month = case_when(data_month == "ene" ~ "01",
-                                         data_month == "feb" ~ "02",
-                                         data_month == "mar" ~ "03",
-                                         data_month == "abr" ~ "04",
-                                         data_month == "may" ~ "05",
-                                         data_month == "jun" ~ "06",
-                                         data_month == "jul" ~ "07",
-                                         data_month == "ago" ~ "08",
-                                         data_month == "sep" ~ "09",
-                                         data_month == "oct" ~ "10",
-                                         data_month == "nov" ~ "11",
-                                         data_month == "dic" ~ "12",
-                                         TRUE ~ data_month),
-                  final_date   = as.Date(str_glue("{data_year}-{data_month}-{data_day}"), format = "%Y-%m-%d"),
-                  Time_Process = Sys.time()) %>%
-    replace(is.na(.), 0)
-}
+  # Extracting the type of Option
+  opt_type <- c()
+  for(i in 1:nrow(option_chain_yahoo_enhanced)){ # i <- 1
+    
+    # Selecting the name column
+    name_tag <- option_chain_yahoo_enhanced$name[i]
+    
+    # Getting the length of that name
+    name_length <- nchar(name_tag)
+    
+    # Getting the option type
+    opt_type <- c(opt_type, substr(name_tag, 14, name_length))
+  }
+
+# Adding the Option Type
+option_chain_yahoo_enhanced <- option_chain_yahoo_enhanced %>%
+  dplyr::mutate(type = opt_type)
 
 # Adding the Current Prices and Time to Expiration (in Years)
-db_option_chain_final <- db_option_chain_final %>%
+db_option_chain_final <- option_chain_yahoo_enhanced %>%
   dplyr::mutate(type = case_when(type == "calls" ~ "Calls",
                                  TRUE ~ "Puts"),
-                time_expiration_years = (((final_date %>% as.Date()) - Sys.Date()) %>% as.numeric())/365,
+                time_expiration_years = (((Expiration %>% as.Date()) - Sys.Date()) %>% as.numeric())/365,
                 time_expiration_years = case_when(time_expiration_years == 0 ~ 1, TRUE ~ time_expiration_years), # For 0 DTE options, I'm setting DTE = 1 day, otherwise they get excluded
-                Expiration_Date = case_when(lubridate::week(final_date) == lubridate::week(Sys.Date()) ~ "W/out this week",
-                                            lubridate::month(final_date) == lubridate::month(Sys.Date()) ~ "W/out this month",
+                Expiration_Date = case_when(lubridate::week(Expiration) == lubridate::week(Sys.Date()) ~ "W/out this week",
+                                            lubridate::month(Expiration) == lubridate::month(Sys.Date()) ~ "W/out this month",
                                             TRUE ~ "The Rest"))
 
 # GEX for the Calls
-db_option_chain_enhance_Calls <- db_option_chain_final %>% dplyr::filter(type == "Calls")
+db_option_chain_enhance_Calls <- db_option_chain_final %>% 
+  dplyr::filter(type == "Calls") %>% 
+  dplyr::select(Spot_Price, Strike, IV, risk_free_rate, time_expiration_years, div_yield, Expiration, OI, Multiplier, Price_Ratio, type) %>%
+  replace(is.na(.), 0)
 
 GEX_Calls <- greeks(bscall(s  = db_option_chain_enhance_Calls$Spot_Price,
                            k  = db_option_chain_enhance_Calls$Strike,
@@ -139,14 +109,17 @@ GEX_Calls <- greeks(bscall(s  = db_option_chain_enhance_Calls$Spot_Price,
                            tt = db_option_chain_enhance_Calls$time_expiration_years,
                            d  = db_option_chain_enhance_Calls$div_yield), complete = TRUE) %>%
   dplyr::select(k, s, Gamma) %>%
-  dplyr::mutate(Date = db_option_chain_enhance_Calls$final_date,
+  dplyr::mutate(Date = db_option_chain_enhance_Calls$Expiration,
                 OI   = db_option_chain_enhance_Calls %>% dplyr::filter(type == "Calls") %>% dplyr::select(OI) %>% pluck(1), 
                 type = "Calls",
                 GEX  = +1 * Gamma * db_option_chain_enhance_Calls$Multiplier * OI * s^2 * 0.01,
                 k    = k * db_option_chain_enhance_Calls$Price_Ratio)
 
 # GEX for the Puts
-db_option_chain_enhance_Puts <- db_option_chain_final %>% dplyr::filter(type == "Puts")
+db_option_chain_enhance_Puts <- db_option_chain_final %>% 
+  dplyr::filter(type == "Puts") %>% 
+  dplyr::select(Spot_Price, Strike, IV, risk_free_rate, time_expiration_years, div_yield, Expiration, OI, Multiplier, Price_Ratio, type) %>%
+  replace(is.na(.), 0)
 
 GEX_Puts <- greeks(bsput(s  = db_option_chain_enhance_Puts$Spot_Price,
                          k  = db_option_chain_enhance_Puts$Strike,
@@ -155,7 +128,7 @@ GEX_Puts <- greeks(bsput(s  = db_option_chain_enhance_Puts$Spot_Price,
                          tt = db_option_chain_enhance_Puts$time_expiration_years,
                          d  = db_option_chain_enhance_Puts$div_yield), complete = TRUE) %>%
   dplyr::select(k, s, Gamma) %>%
-  dplyr::mutate(Date = db_option_chain_enhance_Puts$final_date,
+  dplyr::mutate(Date = db_option_chain_enhance_Puts$Expiration,
                 OI   = db_option_chain_enhance_Puts %>% dplyr::filter(type == "Puts") %>% dplyr::select(OI) %>% pluck(1), 
                 type = "Puts",
                 GEX  = -1 * Gamma * db_option_chain_enhance_Puts$Multiplier * OI * s^2 * 0.01,

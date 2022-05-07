@@ -190,7 +190,7 @@ p <- acum_GEX %>%
   scale_y_continuous(labels = scales::dollar_format()) +
   labs(title    = str_glue("Total Gamma Exposure: {dollar_format()(sum(acum_GEX$GEX)/1000000000)} Billions per 1% move in the SP500"),
        subtitle = str_glue("Assuming dealers are long calls and short puts (considering: {Chart_label})."), 
-       caption  = "Data Source: CBOE.",
+       caption  = "Data Source: CBOE / Own calculations.",
        x = "Strike Price",
        y = "Spot Gamma Exposure (Billions)") +
   theme_minimal()
@@ -214,7 +214,7 @@ p <- acum_GEX %>%
   scale_y_continuous(labels = scales::dollar_format()) +
   labs(title    = str_glue("Total Gamma Exposure by Expiration Date - Next Two Months"),
        subtitle = str_glue("Assuming dealers are long calls and short puts (considering: {Chart_label})."), 
-       caption  = "Data Source: CBOE.",
+       caption  = "Data Source: CBOE / Own calculations.",
        x = "Expiration Date",
        y = "Spot Gamma Exposure (Billions)") +
   theme_minimal()
@@ -237,7 +237,7 @@ p <- acum_GEX %>%
   scale_y_continuous(labels = scales::dollar_format()) +
   labs(title    = str_glue("Total Gamma Exposure: {dollar_format()(sum(acum_GEX$GEX)/1000000000)} Billions per 1% move in the SP500"),
        subtitle = str_glue("Assuming dealers are long calls and short puts (considering: {Chart_label})."), 
-       caption  = "Data Source: CBOE.",
+       caption  = "Data Source: CBOE / Own calculations.",
        x = "Strike Price",
        y = "Spot Gamma Exposure (Billions)") +
   theme_minimal() +
@@ -344,7 +344,7 @@ p <- db_GEX_Profile %>%
   geom_hline(yintercept = c(sum(acum_GEX$GEX)/1000000000, 0), linetype = c("twodash", "dotted"), color = c("steelblue", "red"), size = 0.9) +
   labs(title    = str_glue("Gamma Exposure Profile of the SP500. All expirations."),
        subtitle = str_glue("Gamma Flip at {round(Gamma_Flip, digits = 2)}% of current price (meaning at: {round(Reference_Price*(1+Gamma_Flip/100), digits = 2)}). Assuming dealers are long calls and short puts (considering: {Chart_label})."),
-       caption  = "Data Source: CBOE.",
+       caption  = "Data Source: CBOE / Own calculations.",
        x = "Change in SPX Price",
        y = "Spot Gamma Exposure (Billions)") +
   scale_y_continuous(labels = scales::dollar_format(),
@@ -361,18 +361,15 @@ ggsave("GEX_Profile_All_Expirations.png", plot = p, device = "png", path = "Plot
 
 # Analyzing the Impact of Different Expiration.
 p <- db_GEX_Profile %>%
-  dplyr::group_by(Expiration) %>%
-  dplyr::mutate(Spot_Change = lowess(Spot_Change, GEX, f = 1/10) %>% pluck(1),
-                GEX         = (lowess(Spot_Change, GEX, f = 1/10) %>% pluck(2))/1000000000) %>%
-  ggplot(aes(Spot_Change/100, GEX, group = Expiration, colour = Expiration)) + 
+  ggplot(aes(Spot_Change/100, GEX/1000000000, group = Expiration, colour = Expiration)) + 
   theme_minimal() +
-  scale_color_viridis(discrete = TRUE) +
-  geom_vline(xintercept = c(0, Gamma_Flip/100), linetype = c("twodash", "dotted"), color = c("steelblue", "red"), size = 0.9) +
-  geom_hline(yintercept = c(sum(acum_GEX$GEX)/1000000000, 0), linetype = c("twodash", "dotted"), color = c("steelblue", "red"), size = 0.9) +
   geom_line(size = 1.3) +
+  scale_color_viridis(discrete = TRUE) +
+  geom_vline(xintercept = c(0, Gamma_Flip/100), linetype = c("dotted", "dotted"), color = c("steelblue", "red"), size = 0.9) +
+  geom_hline(yintercept = c(sum(acum_GEX$GEX)/1000000000, 0), linetype = c("dotted", "dotted"), color = c("steelblue", "red"), size = 0.9) +
   labs(title    = str_glue("Gamma Exposure Profile of the SP500. Analyzing different Scenarios."),
        subtitle = str_glue("Gamma Flip at {round(Gamma_Flip, digits = 2)}% of current price (meaning at: {round(Reference_Price*(1+Gamma_Flip/100), digits = 2)}). Assuming dealers are long calls and short puts (considering: {Chart_label})."),
-       caption  = "Data Source: CBOE.",
+       caption  = "Data Source: CBOE / Own calculations.",
        x = "Change in SPX Price",
        y = "Spot Gamma Exposure (Billions)") +
   scale_y_continuous(labels = scales::dollar_format(),
@@ -395,10 +392,10 @@ MoneynessFC_Price <- ATM_Price*MMS_First_Criteria
 MoneynessSC_Price <- ATM_Price*MMS_Second_Criteria
 
 p <- db_Option_Chain_Combined %>% 
-  dplyr::select(fixed_expiration_date, type, iv, strike, Price_Ratio) %>%
+  dplyr::select(expiry, type, iv, strike, Price_Ratio) %>%
   dplyr::mutate(strike = (strike %>% as.numeric()) * Price_Ratio) %>%
-  dplyr::filter(type == "Puts" & fixed_expiration_date >= file_downloaded_date) %>%
-  dplyr::mutate(final_date = fixed_expiration_date %>% as.Date()) %>%
+  dplyr::filter(type == "Puts" & expiry >= Sys.Date()) %>%
+  dplyr::mutate(final_date = expiry %>% as.Date()) %>%
   dplyr::mutate(VST = ifelse(dplyr::lead(strike, n = 1) > ATM_Price & dplyr::lag(strike, n = 1) < ATM_Price, "ATM", 
                              ifelse(dplyr::lead(strike, n = 1) > MoneynessFC_Price & dplyr::lag(strike, n = 1) < MoneynessFC_Price, str_glue("MM{MMS_First_Criteria*100}"), 
                                     ifelse(dplyr::lead(strike, n = 1) > MoneynessSC_Price & dplyr::lag(strike, n = 1) < MoneynessSC_Price, str_glue("MM{MMS_Second_Criteria*100}"), "")))) %>% 
@@ -414,8 +411,8 @@ p <- db_Option_Chain_Combined %>%
   ggplot(aes(x = final_date, y = Mean_IV, colour = VST)) +
   geom_line(size = 0.9) +
   labs(title    = "Implied Volatility Structure",
-       subtitle = "Smoothed data extracted from the Option Chain",
-       caption  = "Data Source: CBOE.",
+       subtitle = "Data extracted from the Option Chain (Combining SPX, XSP and SPY)",
+       caption  = "Data Source: CBOE / Own calculations.",
        x        = "",
        y        = "Implied Volatility") +
   scale_y_continuous(labels = scales::percent) +
