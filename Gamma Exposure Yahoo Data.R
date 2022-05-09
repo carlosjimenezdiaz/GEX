@@ -268,7 +268,7 @@ for(blocks in GEX_blocks){ # blocks <- "All expirations"
                                tt = db_option_chain_enhance_Calls$time_expiration_years,
                                d  = db_option_chain_enhance_Calls$div_yield), complete = TRUE) %>%
       dplyr::select(k, s, Gamma) %>%
-      dplyr::mutate(Date = db_option_chain_enhance_Calls$final_date,
+      dplyr::mutate(Date = db_option_chain_enhance_Calls$Expiration,
                     OI   = db_option_chain_enhance_Calls %>% dplyr::filter(type == "Calls") %>% dplyr::select(OI) %>% pluck(1), 
                     type = "Calls",
                     GEX  = +1 * Gamma * db_option_chain_enhance_Calls$Multiplier * OI * s^2 * 0.01,
@@ -284,7 +284,7 @@ for(blocks in GEX_blocks){ # blocks <- "All expirations"
                              tt = db_option_chain_enhance_Puts$time_expiration_years,
                              d  = db_option_chain_enhance_Puts$div_yield), complete = TRUE) %>%
       dplyr::select(k, s, Gamma) %>%
-  dplyr::mutate(Date = db_option_chain_enhance_Puts$final_date,
+  dplyr::mutate(Date = db_option_chain_enhance_Puts$Expiration,
                 OI   = db_option_chain_enhance_Puts %>% dplyr::filter(type == "Puts") %>% dplyr::select(OI) %>% pluck(1), 
                 type = "Puts",
                 GEX  = -1 * Gamma * db_option_chain_enhance_Puts$Multiplier * OI * s^2 * 0.01,
@@ -295,7 +295,7 @@ for(blocks in GEX_blocks){ # blocks <- "All expirations"
     
     # Saving the calculations in a provisional Dataframe
     db_GEX_Profile_prov <- data.frame(Spot_Change = new_step,
-                                      GEX         = sum(db_GEX_Spot$GEX),
+                                      GEX         = sum(db_GEX_Spot$GEX %>% replace(is.na(.), 0)),
                                       Scenario    = block_Label)
     
     # Accumulating 
@@ -382,22 +382,22 @@ MoneynessFC_Price <- ATM_Price*MMS_First_Criteria
 MoneynessSC_Price <- ATM_Price*MMS_Second_Criteria
 
 p <- db_option_chain_final %>% 
-  dplyr::select(final_date, type, IV, Strike) %>%
-  dplyr::filter(type == "Puts" & final_date >= Sys.Date()) %>%
-  dplyr::mutate(final_date = final_date %>% as.Date()) %>%
+  dplyr::select(Expiration, type, IV, Strike) %>%
+  dplyr::filter(type == "Puts" & Expiration >= Sys.Date()) %>%
+  dplyr::mutate(Expiration = Expiration %>% as.Date()) %>%
   dplyr::mutate(VST = ifelse(dplyr::lead(Strike, n = 1) > ATM_Price & dplyr::lag(Strike, n = 1) < ATM_Price, "ATM", 
                              ifelse(dplyr::lead(Strike, n = 1) > MoneynessFC_Price & dplyr::lag(Strike, n = 1) < MoneynessFC_Price, str_glue("MM{MMS_First_Criteria*100}"), 
                                     ifelse(dplyr::lead(Strike, n = 1) > MoneynessSC_Price & dplyr::lag(Strike, n = 1) < MoneynessSC_Price, str_glue("MM{MMS_Second_Criteria*100}"), "")))) %>% 
   dplyr::filter(VST != "") %>%
-  dplyr::select(final_date, IV, VST) %>%
-  dplyr::group_by(final_date, VST) %>%
+  dplyr::select(Expiration, IV, VST) %>%
+  dplyr::group_by(Expiration, VST) %>%
   dplyr::summarise(Mean_IV = mean(IV %>% as.numeric()), .groups = "drop") %>%
   dplyr::mutate(VST = case_when(VST == str_glue("MM{MMS_First_Criteria*100}") ~ str_glue("Moneyness {MMS_First_Criteria*100}%"),
                                 VST == str_glue("MM{MMS_Second_Criteria*100}") ~ str_glue("Moneyness {MMS_Second_Criteria*100}%"),
                                 TRUE ~ VST)) %>%
   dplyr::group_by(VST) %>%
-  dplyr::mutate(Mean_IV = (lowess(final_date, Mean_IV, f = 1/2) %>% pluck(2))) %>%
-  ggplot(aes(x = final_date, y = Mean_IV, colour = VST)) +
+  dplyr::mutate(Mean_IV = (lowess(Expiration, Mean_IV, f = 1/2) %>% pluck(2))) %>%
+  ggplot(aes(x = Expiration, y = Mean_IV, colour = VST)) +
   geom_line(size = 0.9) +
   labs(title    = "Implied Volatility Structure",
        subtitle = "Smoothed data extracted from the Option Chain",

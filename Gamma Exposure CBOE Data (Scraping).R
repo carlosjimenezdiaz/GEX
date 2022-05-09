@@ -312,7 +312,7 @@ for(blocks in GEX_blocks){ # blocks <- "All expirations"
     
     # Saving the calculations in a provisional Dataframe
     db_GEX_Profile_prov <- data.frame(Spot_Change = new_step,
-                                      GEX         = sum(db_GEX_Spot$GEX),
+                                      GEX         = sum(db_GEX_Spot$GEX %>% replace(is.na(.), 0)),
                                       Expiration  = block_Label)
     
     # Accumulating 
