@@ -101,59 +101,63 @@ for(CBOE_File in list.files("cboe_file/From Scraping/")){ # CBOE_File <- "CBOE_D
                      Ticker          = CBOE_General_Info$Ticker_CBOE[1]))
   
   # Extracting data from the Calls and calculating GEX
-  # GEX - Calls
-  db_Option_Chain_Calls <- CBOE_General_Info %>%
-    dplyr::filter(opt_type == "C") %>%
-    dplyr::select(expiry, iv, open_interest, strike, Spot_Price, days2Exp, Time_Process, div_yield, risk_free_rate, Multiplier, Price_Ratio) %>%
-    dplyr::mutate(type      = "Calls",
-                  days2Exp  = days2Exp %>% as.numeric(),
-                  days2Exp  = case_when(days2Exp == 0 ~ 1/365, TRUE ~ days2Exp/365),
-                  Scenarios = case_when(lubridate::week(expiry) == lubridate::week(Time_Process) ~ "W/out this week",
-                                        lubridate::month(expiry) == lubridate::month(Time_Process) ~ "W/out this month",
-                                        TRUE ~ "The Rest"))
-  
-  # GEX Calculations
-  GEX_Calls <- greeks(bscall(s  = db_Option_Chain_Calls$Spot_Price,
-                             k  = db_Option_Chain_Calls$strike,
-                             v  = db_Option_Chain_Calls$iv,
-                             r  = db_Option_Chain_Calls$risk_free_rate,
-                             tt = db_Option_Chain_Calls$days2Exp,
-                             d  = db_Option_Chain_Calls$div_yield), complete = TRUE) %>%
-    dplyr::select(k, s, Gamma) %>%
-    dplyr::mutate(Date       = db_Option_Chain_Calls$expiry,
-                  OI         = db_Option_Chain_Calls$open_interest %>% as.numeric(),
-                  type       = "Calls",
-                  Mul        = db_Option_Chain_Calls$Multiplier,
-                  PriceRatio = db_Option_Chain_Calls$Price_Ratio,
-                  GEX        = +1 * Gamma * Mul * OI * s^2 * 0.01) %>%
-    dplyr::select(Date, k, s, GEX, PriceRatio, type)
-  
-  # GEX - Puts
-  db_Option_Chain_Puts <- CBOE_General_Info %>%
-    dplyr::filter(opt_type == "P") %>%
-    dplyr::select(expiry, iv, open_interest, strike, Spot_Price, days2Exp, Time_Process, div_yield, risk_free_rate, Multiplier, Price_Ratio) %>%
-    dplyr::mutate(type      = "Puts",
-                  days2Exp  = days2Exp %>% as.numeric(),
-                  days2Exp  = case_when(days2Exp == 0 ~ 1/365, TRUE ~ days2Exp/365),
-                  Scenarios = case_when(lubridate::week(expiry) == lubridate::week(Time_Process) ~ "W/out this week",
-                                        lubridate::month(expiry) == lubridate::month(Time_Process) ~ "W/out this month",
-                                        TRUE ~ "The Rest"))
-  
-  # GEX Calculations
-  GEX_Puts <- greeks(bsput(s  = db_Option_Chain_Puts$Spot_Price,
-                           k  = db_Option_Chain_Puts$strike,
-                           v  = db_Option_Chain_Puts$iv,
-                           r  = db_Option_Chain_Puts$risk_free_rate,
-                           tt = db_Option_Chain_Puts$days2Exp,
-                           d  = db_Option_Chain_Puts$div_yield), complete = TRUE) %>%
-    dplyr::select(k, s, Gamma) %>%
-    dplyr::mutate(Date       = db_Option_Chain_Puts$expiry,
-                  OI         = db_Option_Chain_Puts$open_interest %>% as.numeric(),
-                  type       = "Puts",
-                  Mul        = db_Option_Chain_Puts$Multiplier,
-                  PriceRatio = db_Option_Chain_Puts$Price_Ratio,
-                  GEX        = -1 * Gamma * Mul * OI * s^2 * 0.01) %>%
-    dplyr::select(Date, k, s, GEX, PriceRatio, type)
+    # GEX - Calls
+    db_Option_Chain_Calls <- CBOE_General_Info %>%
+      dplyr::filter(opt_type == "C") %>%
+      dplyr::select(expiry, iv, open_interest, strike, Spot_Price, days2Exp, Time_Process, div_yield, risk_free_rate, Multiplier, Price_Ratio) %>%
+      dplyr::mutate(type      = "Calls",
+                    days2Exp  = days2Exp %>% as.numeric(),
+                    days2Exp  = case_when(days2Exp == 0 ~ 1/365, TRUE ~ days2Exp/365),
+                    Scenario1 = case_when(lubridate::week(expiry)  == lubridate::week(Time_Process) ~ "This Week",
+                                          TRUE ~ "Not This Week"),
+                    Scenario2 = case_when(lubridate::month(expiry)  == lubridate::month(Time_Process) ~ "This Month",
+                                          TRUE ~ "Not This Month"),
+                    Scenario3 = "All Dates")
+    
+    # GEX Calculations
+    GEX_Calls <- greeks(bscall(s  = db_Option_Chain_Calls$Spot_Price,
+                               k  = db_Option_Chain_Calls$strike,
+                               v  = db_Option_Chain_Calls$iv,
+                               r  = db_Option_Chain_Calls$risk_free_rate,
+                               tt = db_Option_Chain_Calls$days2Exp,
+                               d  = db_Option_Chain_Calls$div_yield), complete = TRUE) %>%
+      dplyr::select(k, s, Gamma) %>%
+      dplyr::mutate(Date       = db_Option_Chain_Calls$expiry,
+                    OI         = db_Option_Chain_Calls$open_interest %>% as.numeric(),
+                    type       = "Calls",
+                    Mul        = db_Option_Chain_Calls$Multiplier,
+                    PriceRatio = db_Option_Chain_Calls$Price_Ratio,
+                    GEX        = +1 * Gamma * Mul * OI * s^2 * 0.01) %>%
+      dplyr::select(Date, k, s, GEX, PriceRatio, type)
+    
+    # GEX - Puts
+    db_Option_Chain_Puts <- CBOE_General_Info %>%
+      dplyr::filter(opt_type == "P") %>%
+      dplyr::select(expiry, iv, open_interest, strike, Spot_Price, days2Exp, Time_Process, div_yield, risk_free_rate, Multiplier, Price_Ratio) %>%
+      dplyr::mutate(type      = "Puts",
+                    days2Exp  = days2Exp %>% as.numeric(),
+                    days2Exp  = case_when(days2Exp == 0 ~ 1/365, TRUE ~ days2Exp/365),
+                    Scenario1 = case_when(lubridate::week(expiry)  == lubridate::week(Time_Process) ~ "This Week",
+                                          TRUE ~ "Not This Week"),
+                    Scenario2 = case_when(lubridate::month(expiry)  == lubridate::month(Time_Process) ~ "This Month",
+                                          TRUE ~ "Not This Month"),
+                    Scenario3 = "All Dates")
+    
+    # GEX Calculations
+    GEX_Puts <- greeks(bsput(s  = db_Option_Chain_Puts$Spot_Price,
+                             k  = db_Option_Chain_Puts$strike,
+                             v  = db_Option_Chain_Puts$iv,
+                             r  = db_Option_Chain_Puts$risk_free_rate,
+                             tt = db_Option_Chain_Puts$days2Exp,
+                             d  = db_Option_Chain_Puts$div_yield), complete = TRUE) %>%
+      dplyr::select(k, s, Gamma) %>%
+      dplyr::mutate(Date       = db_Option_Chain_Puts$expiry,
+                    OI         = db_Option_Chain_Puts$open_interest %>% as.numeric(),
+                    type       = "Puts",
+                    Mul        = db_Option_Chain_Puts$Multiplier,
+                    PriceRatio = db_Option_Chain_Puts$Price_Ratio,
+                    GEX        = -1 * Gamma * Mul * OI * s^2 * 0.01) %>%
+      dplyr::select(Date, k, s, GEX, PriceRatio, type)
   
   # Combining all the DB of Options
   db_Option_Chain_Combined <- db_Option_Chain_Combined %>%
@@ -198,6 +202,21 @@ p <- acum_GEX %>%
 p
 
 ggsave("GEX_vs_Strikes.png", plot = p, device = "png", path = "Plots - GEX CBOE/", width = 10, height = 7, units = "in") 
+
+# Getting the Put Wall and the Call Wall
+acum_GEX %>%
+  dplyr::select(k, GEX) %>%
+  dplyr::group_by(k) %>%
+  dplyr::filter(k > Reference_Price*0.80 & k < Reference_Price*1.20) %>%
+  dplyr::summarise(GEX_NET = sum(GEX)/1000000000) %>% 
+  slice_min(GEX_NET, with_ties = FALSE) -> Put_Wall
+
+acum_GEX %>%
+  dplyr::select(k, GEX) %>%
+  dplyr::group_by(k) %>%
+  dplyr::filter(k > Reference_Price*0.80 & k < Reference_Price*1.20) %>%
+  dplyr::summarise(GEX_NET = sum(GEX)/1000000000) %>% 
+  slice_max(GEX_NET, with_ties = FALSE) -> Call_Wall
 
 # GEX (Next Two Months)
 p <- acum_GEX %>%
@@ -249,20 +268,19 @@ ggsave("GEX_vs_Option_Types.png", plot = p, device = "png", path = "Plots - GEX 
 
 # Calculating the Gamma Exposure Profile
 db_GEX_Profile <- NULL 
-GEX_blocks     <- c("All expirations", db_Option_Chain_Combined$Scenarios %>% unique() %>% head(n = 2))
 
-for(blocks in GEX_blocks){ # blocks <- "All expirations"
+for(blocks in 13:15){ # blocks <- 13
   
   # Filtering
-  if(blocks == "All expirations"){
-    db_Option_Chain_New <- db_Option_Chain_Combined
-    block_Label <- "All expirations"
-  }else if(blocks == "W/out this week"){
-    db_Option_Chain_New <- db_Option_Chain_Combined %>% dplyr::filter(!Scenarios %in% c("All expirations", "W/out this week"))
-    block_Label <- "W/out this week"
+  if(blocks == 13){
+    db_Option_Chain_New <- db_Option_Chain_Combined[, 1:blocks] %>% dplyr::filter(Scenario1 == "Not This Week")
+    block_Label         <- "W/out this Week"
+  }else if(blocks == 14){
+    db_Option_Chain_New <- db_Option_Chain_Combined[, 1:blocks] %>% dplyr::filter(Scenario2 == "Not This Month")
+    block_Label         <- "W/out this Month" 
   }else{
-    db_Option_Chain_New <- db_Option_Chain_Combined %>% dplyr::filter(!Scenarios %in% c("All expirations", "W/out this week", "W/out this month"))
-    block_Label <- "W/out this month"
+    db_Option_Chain_New <- db_Option_Chain_Combined
+    block_Label         <- "All Expirations"
   }
   
   # Setting the Delta in price
@@ -321,7 +339,7 @@ for(blocks in GEX_blocks){ # blocks <- "All expirations"
 }
 
 Gamma_Flip <- db_GEX_Profile %>%
-  dplyr::filter(Expiration == "All expirations") %>%
+  dplyr::filter(Expiration == "All Expirations") %>%
   dplyr::mutate(Flip = ifelse(dplyr::lead(GEX > 0) & GEX < 0, "Yes", "No")) %>%
   dplyr::filter(Flip == "Yes") %>%
   dplyr::select(Spot_Change) %>%
@@ -329,7 +347,7 @@ Gamma_Flip <- db_GEX_Profile %>%
 
 # GEX Profile applying locally weighted scatterplot smoothing (removing the noice of the calculations)
 p <- db_GEX_Profile %>%
-  dplyr::filter(Expiration == "All expirations") %>%
+  dplyr::filter(Expiration == "All Expirations") %>%
   dplyr::mutate(Spot_Change = lowess(Spot_Change, GEX, f = 1/10) %>% pluck(1),
                 GEX         = (lowess(Spot_Change, GEX, f = 1/10) %>% pluck(2))/1000000000) %>%
   ggplot(aes(Spot_Change/100, GEX)) + 
@@ -352,7 +370,9 @@ p <- db_GEX_Profile %>%
   scale_x_continuous(labels = scales::percent_format(accuracy = 1),
                      breaks = scales::pretty_breaks(n = 10),
                      sec.axis = sec_axis(trans = ~ . * Reference_Price + Reference_Price, name = "SPX Price", breaks = scales::pretty_breaks(n = 10))) +
-  theme(legend.title = element_blank())  
+  theme(legend.title = element_blank()) + 
+  geom_vline(xintercept = (Put_Wall %>% dplyr::select(k) %>% pull(1))/Reference_Price - 1, linetype = "dotted", color = "red", size = 2.5) +
+  geom_vline(xintercept = (Call_Wall %>% dplyr::select(k) %>% pull(1))/Reference_Price - 1, linetype = "dotted", color = "blue", size = 2.5)
 
 p
 
