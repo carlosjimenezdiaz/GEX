@@ -360,7 +360,7 @@ p <- db_GEX_Profile %>%
   geom_line(size = 1.3, colour = "black") +
   geom_vline(xintercept = c(0, Gamma_Flip/100), linetype = c("twodash", "dotted"), color = c("steelblue", "red"), size = 0.9) +
   geom_hline(yintercept = c(sum(acum_GEX$GEX)/1000000000, 0), linetype = c("twodash", "dotted"), color = c("steelblue", "red"), size = 0.9) +
-  labs(title    = str_glue("Gamma Exposure Profile of the SP500. All expirations."),
+  labs(title    = str_glue("Gamma Exposure Profile of the SP500 - All expirations (Current GEX {dollar_format()(sum(acum_GEX$GEX)/1000000000)} Billions)."),
        subtitle = str_glue("Gamma Flip at {round(Gamma_Flip, digits = 2)}% of current price (meaning at: {round(Reference_Price*(1+Gamma_Flip/100), digits = 2)}). Assuming dealers are long calls and short puts (considering: {Chart_label})."),
        caption  = "Data Source: CBOE / Own calculations.",
        x = "Change in SPX Price",
@@ -387,7 +387,7 @@ p <- db_GEX_Profile %>%
   scale_color_viridis(discrete = TRUE) +
   geom_vline(xintercept = c(0, Gamma_Flip/100), linetype = c("dotted", "dotted"), color = c("steelblue", "red"), size = 0.9) +
   geom_hline(yintercept = c(sum(acum_GEX$GEX)/1000000000, 0), linetype = c("dotted", "dotted"), color = c("steelblue", "red"), size = 0.9) +
-  labs(title    = str_glue("Gamma Exposure Profile of the SP500. Analyzing different Scenarios."),
+  labs(title    = str_glue("Gamma Exposure Profile of the SP500. Analyzing different Scenarios (Current GEX {dollar_format()(sum(acum_GEX$GEX)/1000000000)} Billions)."),
        subtitle = str_glue("Gamma Flip at {round(Gamma_Flip, digits = 2)}% of current price (meaning at: {round(Reference_Price*(1+Gamma_Flip/100), digits = 2)}). Assuming dealers are long calls and short puts (considering: {Chart_label})."),
        caption  = "Data Source: CBOE / Own calculations.",
        x = "Change in SPX Price",
