@@ -429,7 +429,7 @@ p <- db_Option_Chain_Combined %>%
   dplyr::group_by(VST) %>%
   dplyr::mutate(Mean_IV = (lowess(final_date, Mean_IV, f = 1/2) %>% pluck(2))) %>%
   ggplot(aes(x = final_date, y = Mean_IV, colour = VST)) +
-  geom_line(size = 0.9) +
+  geom_line(linewidth = 0.9) +
   labs(title    = "Implied Volatility Structure",
        subtitle = "Data extracted from the Option Chain (Combining SPX, XSP and SPY)",
        caption  = "Data Source: CBOE / Own calculations.",
