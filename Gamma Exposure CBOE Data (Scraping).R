@@ -14,7 +14,7 @@ source(file = "00_scripts/Libraries.R")
 
 # Deleting all the files from Plots - GEX
 do.call(file.remove, list(list.files("Plots - GEX CBOE/", full.names = TRUE)))
-do.call(file.remove, list(list.files("cboe_file/From Scraping//", full.names = TRUE)))
+do.call(file.remove, list(list.files("cboe_file/From Scraping/", full.names = TRUE)))
 
 # Loading the functions
 libraries()
@@ -245,7 +245,7 @@ ggsave("GEX_vs_Next_Two_Months.png", plot = p, device = "png", path = "Plots - G
 # GEX across Strikes and option type
 p <- acum_GEX %>%
   dplyr::select(k, type, GEX) %>%
-  dplyr::filter(k > Reference_Price*0.80 & k < Reference_Price*1.20) %>%
+  dplyr::filter(k > Reference_Price*0.50 & k < Reference_Price*1.50) %>%
   dplyr::group_by(k, type) %>%
   dplyr::summarise(GEX_NET = sum(GEX)/1000000000) %>%
   purrr::set_names(c("Strike", "Type", "Gamma Exposure")) %>%
@@ -284,7 +284,7 @@ for(blocks in 13:15){ # blocks <- 13
   }
   
   # Setting the Delta in price
-  Spot_Steps <- seq(-20, 20, 0.1)
+  Spot_Steps <- seq(-30, 30, 0.1)
   
   for(new_step in Spot_Steps){ # new_step <- 0
     
@@ -371,8 +371,8 @@ p <- db_GEX_Profile %>%
                      breaks = scales::pretty_breaks(n = 10),
                      sec.axis = sec_axis(trans = ~ . * Reference_Price + Reference_Price, name = "SPX Price", breaks = scales::pretty_breaks(n = 10))) +
   theme(legend.title = element_blank()) + 
-  geom_vline(xintercept = (Put_Wall %>% dplyr::select(k) %>% pull(1))/Reference_Price - 1, linetype = "dotted", color = "red", size = 2.5) +
-  geom_vline(xintercept = (Call_Wall %>% dplyr::select(k) %>% pull(1))/Reference_Price - 1, linetype = "dotted", color = "blue", size = 2.5)
+  geom_vline(xintercept = (Put_Wall %>% dplyr::select(k) %>% pull(1))/Reference_Price - 1, linetype = "dotted", color = "red", size = 0.9) +
+  geom_vline(xintercept = (Call_Wall %>% dplyr::select(k) %>% pull(1))/Reference_Price - 1, linetype = "dotted", color = "blue", size = 0.9)
 
 p
 
